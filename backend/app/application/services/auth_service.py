@@ -9,9 +9,9 @@ and JWT for token-based authentication.
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 import structlog
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.config import settings
 from app.domain.entities import User
@@ -26,9 +26,6 @@ from app.domain.repositories import IUserRepository
 from app.application.interfaces import IAuthService
 
 logger = structlog.get_logger(__name__)
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class AuthService(IAuthService):
@@ -48,12 +45,17 @@ class AuthService(IAuthService):
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a plain-text password using bcrypt."""
-        return pwd_context.hash(password)
+        # Truncate to 72 bytes (bcrypt limit), then encode
+        password_bytes = password[:72].encode("utf-8")
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Verify a plain-text password against its bcrypt hash."""
-        return pwd_context.verify(plain_password, hashed_password)
+        password_bytes = plain_password[:72].encode("utf-8")
+        hashed_bytes = hashed_password.encode("utf-8")
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
 
     # ── Token Utilities ─────────────────────────────────────
 
