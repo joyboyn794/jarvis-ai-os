@@ -4,15 +4,22 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+  token?: string;
 }
 
 class ApiClient {
-  private getHeaders(): Record<string, string> {
+  private getHeaders(tokenOverride?: string): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    // Get token from localStorage (set by zustand persist)
+    // Use explicit token if provided (avoids localStorage race condition)
+    if (tokenOverride) {
+      headers['Authorization'] = `Bearer ${tokenOverride}`;
+      return headers;
+    }
+
+    // Fallback: Get token from localStorage (set by zustand persist)
     try {
       const stored = localStorage.getItem('jarvis-auth');
       if (stored) {
@@ -30,11 +37,11 @@ class ApiClient {
   }
 
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const { method = 'GET', body, headers: extraHeaders } = options;
+    const { method = 'GET', body, headers: extraHeaders, token } = options;
 
     const response = await fetch(`${API_BASE}${endpoint}`, {
       method,
-      headers: { ...this.getHeaders(), ...extraHeaders },
+      headers: { ...this.getHeaders(token), ...extraHeaders },
       body: body ? JSON.stringify(body) : undefined,
     });
 
@@ -50,8 +57,8 @@ class ApiClient {
     return response.json();
   }
 
-  async get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint);
+  async get<T>(endpoint: string, token?: string): Promise<T> {
+    return this.request<T>(endpoint, { token });
   }
 
   async post<T>(endpoint: string, body?: unknown): Promise<T> {

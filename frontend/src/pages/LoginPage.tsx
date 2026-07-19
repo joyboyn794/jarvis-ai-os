@@ -32,7 +32,8 @@ export function LoginPage() {
         await authApi.register(email, password, displayName);
       }
       const tokens = await authApi.login(email, password);
-      const user = await authApi.getMe();
+      // Pass token directly to getMe to avoid localStorage race condition
+      const user = await authApi.getMe(tokens.access_token);
       setAuth(user, tokens.access_token, tokens.refresh_token);
       navigate('/');
     } catch (err: any) {

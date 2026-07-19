@@ -49,7 +49,7 @@ export const authApi = {
   refresh: (refresh_token: string) =>
     apiClient.post<TokenResponse>('/auth/refresh', { refresh_token }),
 
-  getMe: () => apiClient.get<User>('/auth/me'),
+  getMe: (token?: string) => apiClient.get<User>('/auth/me', token),
 };
 
 // ── Chat ───────────────────────────────────────────────────
