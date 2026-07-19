@@ -34,7 +34,7 @@ from app.application.interfaces import (
     IChatService,
     IMemoryService,
 )
-from app.infrastructure.ai.openai_client import OpenAIClient
+from app.infrastructure.ai.openai_client import AIClient
 
 logger = structlog.get_logger(__name__)
 
@@ -77,7 +77,7 @@ class ChatService(IChatService):
         conversation_repo: IConversationRepository,
         message_repo: IMessageRepository,
         memory_service: IMemoryService,
-        ai_client: OpenAIClient,
+        ai_client: AIClient,
     ):
         self.conversation_repo = conversation_repo
         self.message_repo = message_repo

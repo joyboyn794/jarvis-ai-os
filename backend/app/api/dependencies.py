@@ -9,7 +9,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import get_db
-from app.infrastructure.ai.openai_client import openai_client, OpenAIClient
+from app.infrastructure.ai.openai_client import ai_client, AIClient
 from app.infrastructure.repositories import (
     UserRepository,
     ConversationRepository,
@@ -41,9 +41,9 @@ def get_memory_repository(db: AsyncSession = Depends(get_db)) -> MemoryRepositor
     return MemoryRepository(db)
 
 
-def get_ai_client() -> OpenAIClient:
+def get_ai_client() -> AIClient:
     """Get the OpenAI client singleton."""
-    return openai_client
+    return ai_client
 
 
 def get_auth_service(
@@ -55,7 +55,7 @@ def get_auth_service(
 
 def get_memory_service(
     memory_repo: MemoryRepository = Depends(get_memory_repository),
-    ai_client: OpenAIClient = Depends(get_ai_client),
+    ai_client: AIClient = Depends(get_ai_client),
 ) -> MemoryService:
     """Get MemoryService with its dependencies."""
     return MemoryService(memory_repo=memory_repo, ai_client=ai_client)
@@ -65,7 +65,7 @@ def get_chat_service(
     conversation_repo: ConversationRepository = Depends(get_conversation_repository),
     message_repo: MessageRepository = Depends(get_message_repository),
     memory_service: MemoryService = Depends(get_memory_service),
-    ai_client: OpenAIClient = Depends(get_ai_client),
+    ai_client: AIClient = Depends(get_ai_client),
 ) -> ChatService:
     """Get ChatService with its dependencies."""
     return ChatService(

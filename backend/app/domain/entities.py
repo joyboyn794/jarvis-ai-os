@@ -120,7 +120,7 @@ class Conversation:
     id: UUID
     user_id: UUID
     title: str = "New Conversation"
-    model: str = "gpt-4o"
+    model: str = "llama-3.1-8b-instant"
     messages: List[Message] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)

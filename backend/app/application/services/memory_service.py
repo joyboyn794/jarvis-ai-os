@@ -17,7 +17,7 @@ import structlog
 from app.domain.entities import MemoryEntry, MemoryType
 from app.domain.repositories import IMemoryRepository
 from app.application.interfaces import IMemoryService, MemorySearchResult
-from app.infrastructure.ai.openai_client import OpenAIClient
+from app.infrastructure.ai.openai_client import AIClient
 
 logger = structlog.get_logger(__name__)
 
@@ -57,7 +57,7 @@ class MemoryService(IMemoryService):
     - Context building for chat prompts
     """
 
-    def __init__(self, memory_repo: IMemoryRepository, ai_client: OpenAIClient):
+    def __init__(self, memory_repo: IMemoryRepository, ai_client: AIClient):
         self.memory_repo = memory_repo
         self.ai_client = ai_client
 

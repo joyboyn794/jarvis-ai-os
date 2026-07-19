@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from fastapi.responses import Response
 
 from app.domain.entities import User
-from app.infrastructure.ai.openai_client import OpenAIClient
+from app.infrastructure.ai.openai_client import AIClient
 from app.api.dependencies import get_ai_client
 from app.api.auth_utils import get_current_user
 
@@ -23,7 +23,7 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     language: str = Query(default=None, max_length=5),
     current_user: User = Depends(get_current_user),
-    ai_client: OpenAIClient = Depends(get_ai_client),
+    ai_client: AIClient = Depends(get_ai_client),
 ):
     """
     Transcribe audio to text using OpenAI Whisper.
@@ -79,7 +79,7 @@ async def text_to_speech(
     voice: str = Query("alloy", pattern="^(alloy|echo|fable|onyx|nova|shimmer)$"),
     speed: float = Query(1.0, ge=0.25, le=4.0),
     current_user: User = Depends(get_current_user),
-    ai_client: OpenAIClient = Depends(get_ai_client),
+    ai_client: AIClient = Depends(get_ai_client),
 ):
     """
     Convert text to speech using OpenAI TTS.

@@ -31,12 +31,22 @@ class Settings(BaseSettings):
     DATABASE_URL_SYNC: str = "postgresql://jarvis:jarvis_secret@localhost:5432/jarvis"
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # ── OpenAI ───────────────────────────────────────
+    # ── LLM Provider ─────────────────────────────────
+    LLM_PROVIDER: str = "groq"  # groq | openai | ollama
     OPENAI_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-ada-002"
     OPENAI_MAX_TOKENS: int = 4096
     OPENAI_TEMPERATURE: float = 0.7
+
+    @property
+    def chat_model(self) -> str:
+        """Return the active chat model based on provider."""
+        if self.LLM_PROVIDER == "groq":
+            return self.GROQ_MODEL
+        return self.OPENAI_MODEL
 
     # ── Voice ────────────────────────────────────────
     WHISPER_MODEL: str = "base"

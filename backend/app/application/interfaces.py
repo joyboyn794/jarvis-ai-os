@@ -28,7 +28,7 @@ class ChatRequest:
     """Incoming chat message request."""
     conversation_id: Optional[UUID] = None
     message: str = ""
-    model: str = "gpt-4o"
+    model: str = "llama-3.1-8b-instant"
     stream: bool = True
     use_memory: bool = True
 

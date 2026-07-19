@@ -59,7 +59,7 @@ class ChatRequest(BaseModel):
     """Request body for sending a chat message."""
     conversation_id: Optional[UUID] = None
     message: str = Field(..., min_length=1, max_length=10000)
-    model: str = "gpt-4o"
+    model: str = "llama-3.1-8b-instant"
     stream: bool = True
     use_memory: bool = True
 
