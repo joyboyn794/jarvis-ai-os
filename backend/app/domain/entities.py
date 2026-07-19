@@ -136,7 +136,7 @@ class MemoryEntry:
         id: Unique identifier.
         user_id: Owner of this memory.
         content: The memory text.
-        embedding: Vector embedding (1536-dim for ada-002).
+        embedding: Vector embedding (384-dim vector).
         memory_type: Classification of the memory.
         importance: Importance score (0.0 - 1.0).
         access_count: How many times this was retrieved.

@@ -245,7 +245,7 @@ class MemoryService(IMemoryService):
         for mem_type in MemoryType:
             # Retrieve all memories of this type
             # Use a generic query to find them
-            dummy_embedding = [0.0] * 1536
+            dummy_embedding = [0.0] * 384
             entries = await self.memory_repo.search_similar(
                 user_id=user_id,
                 embedding=dummy_embedding,

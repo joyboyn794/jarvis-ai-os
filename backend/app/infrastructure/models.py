@@ -128,7 +128,7 @@ class MemoryEntryModel(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding = mapped_column(Vector(1536), nullable=True)
+    embedding = mapped_column(Vector(384), nullable=True)
     memory_type: Mapped[str] = mapped_column(String(50), default="fact")
     importance: Mapped[float] = mapped_column(Float, default=0.5)
     access_count: Mapped[int] = mapped_column(Integer, default=0)

@@ -66,7 +66,7 @@ CREATE TABLE memory_entries (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
-    embedding vector(1536),
+    embedding vector(384),
     memory_type VARCHAR(50) DEFAULT 'fact' CHECK (memory_type IN ('fact', 'preference', 'event', 'skill', 'summary')),
     importance FLOAT DEFAULT 0.5,
     access_count INTEGER DEFAULT 0,
