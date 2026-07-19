@@ -1,8 +1,9 @@
 """
 Memory Repository Implementation
 
-Implements IMemoryRepository using SQLAlchemy async ORM + pgvector.
-Provides semantic search via cosine similarity on vector embeddings.
+Implements IMemoryRepository using SQLAlchemy async ORM.
+With PostgreSQL + pgvector: provides semantic search via cosine similarity.
+With SQLite: vector search is disabled (returns empty results).
 """
 
 from datetime import datetime
@@ -12,24 +13,36 @@ from uuid import UUID
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.domain.entities import MemoryEntry, MemoryType
 from app.domain.repositories import IMemoryRepository
 from app.infrastructure.models import MemoryEntryModel
 
 
 class MemoryRepository(IMemoryRepository):
-    """SQLAlchemy + pgvector-based Memory repository."""
+    """SQLAlchemy-based Memory repository."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
 
     @staticmethod
     def _to_domain(model: MemoryEntryModel) -> MemoryEntry:
+        """Map ORM model to domain entity."""
+        # Parse embedding from stored string (SQLite) or pgvector (Postgres)
+        emb = model.embedding
+        if emb is not None and isinstance(emb, str):
+            try:
+                emb = [float(x) for x in emb.split(",")]
+            except (ValueError, AttributeError):
+                emb = None
+        elif emb is not None:
+            emb = list(emb) if hasattr(emb, '__iter__') else None
+
         return MemoryEntry(
             id=model.id,
             user_id=model.user_id,
             content=model.content,
-            embedding=list(model.embedding) if model.embedding is not None else None,
+            embedding=emb,
             memory_type=MemoryType(model.memory_type),
             importance=model.importance,
             access_count=model.access_count,
@@ -40,11 +53,18 @@ class MemoryRepository(IMemoryRepository):
 
     @staticmethod
     def _to_model(entity: MemoryEntry) -> MemoryEntryModel:
+        """Map domain entity to ORM model."""
+        # Serialize embedding for SQLite (comma-separated string)
+        # or keep as list for PostgreSQL (pgvector)
+        emb = entity.embedding
+        if emb is not None and settings.DB_TYPE == "sqlite":
+            emb = ",".join(str(x) for x in emb)
+
         return MemoryEntryModel(
             id=entity.id,
             user_id=entity.user_id,
             content=entity.content,
-            embedding=entity.embedding,
+            embedding=emb,
             memory_type=entity.memory_type.value,
             importance=entity.importance,
             access_count=entity.access_count,
@@ -71,11 +91,25 @@ class MemoryRepository(IMemoryRepository):
         """
         Search for memory entries by cosine similarity.
 
-        Uses pgvector's <=> operator for cosine distance.
-        Lower distance = higher similarity.
+        PostgreSQL: Uses pgvector's <=> operator.
+        SQLite: Returns empty list (vector search not supported).
         """
-        # Convert threshold (similarity) to distance:
-        # cosine_distance = 1 - cosine_similarity
+        if settings.DB_TYPE == "sqlite":
+            # Vector search not available with SQLite
+            # Just return recent memories of the given type
+            query = select(MemoryEntryModel).where(
+                MemoryEntryModel.user_id == user_id,
+            ).order_by(MemoryEntryModel.created_at.desc()).limit(limit)
+
+            if memory_type:
+                query = query.where(MemoryEntryModel.memory_type == memory_type)
+
+            result = await self.session.execute(query)
+            return [self._to_domain(m) for m in result.scalars().all()]
+
+        # PostgreSQL with pgvector
+        from pgvector.sqlalchemy import Vector
+
         max_distance = 1.0 - threshold
 
         query = (

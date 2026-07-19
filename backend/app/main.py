@@ -16,8 +16,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.api.v1.router import api_router
-from app.infrastructure.database import engine, Base
-from app.infrastructure.redis import redis_client
+from app.infrastructure.database import async_engine, Base, init_db, close_db
 from app.infrastructure.logging import setup_logging
 
 logger = structlog.get_logger(__name__)
@@ -30,9 +29,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     Startup:
     - Initialize logging
+    - Create database tables (SQLite auto-create)
     - Verify database connectivity
-    - Verify Redis connectivity
-    - Warm up caches if needed
+    - Verify Redis connectivity (if enabled)
 
     Shutdown:
     - Close database connections
@@ -41,23 +40,48 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     # ── Startup ──────────────────────────────────────────
     setup_logging()
-    logger.info("🚀 Jarvis AI OS starting up...", environment=settings.APP_ENV)
+    logger.info(
+        "🚀 Jarvis AI OS starting up...",
+        environment=settings.APP_ENV,
+        db_type=settings.DB_TYPE,
+    )
+
+    # Create tables if SQLite
+    if settings.DB_TYPE == "sqlite":
+        await init_db()
+        logger.info("✅ SQLite tables created (auto)")
 
     # Verify database connection
-    async with engine.begin() as conn:
-        await conn.execute(Base.metadata.select().limit(1))
-    logger.info("✅ Database connected")
+    try:
+        async with async_engine.begin() as conn:
+            await conn.run_sync(lambda c: None)
+        logger.info("✅ Database connected")
+    except Exception as e:
+        logger.error("❌ Database connection failed", error=str(e))
+        raise
 
-    # Verify Redis connection
-    await redis_client.ping()
-    logger.info("✅ Redis connected")
+    # Verify Redis connection (optional)
+    if settings.USE_REDIS:
+        try:
+            from app.infrastructure.redis import redis_client
+            await redis_client.ping()
+            logger.info("✅ Redis connected")
+        except Exception as e:
+            logger.warning("⚠️ Redis not available — running without cache", error=str(e))
 
     yield
 
     # ── Shutdown ─────────────────────────────────────────
     logger.info("🛑 Jarvis AI OS shutting down...")
-    await engine.dispose()
-    await redis_client.close()
+    await close_db()
+
+    if settings.USE_REDIS:
+        try:
+            from app.infrastructure.redis import redis_client
+            await redis_client.close()
+        except Exception:
+            pass
+
     logger.info("✅ Connections closed")
 
 
@@ -76,7 +100,7 @@ def create_app() -> FastAPI:
     # ── Middleware ───────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.ALLOWED_ORIGINS,
+        allow_origins=settings.allowed_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

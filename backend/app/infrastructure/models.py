@@ -3,13 +3,13 @@ SQLAlchemy ORM Models
 
 Database table definitions mapped to SQLAlchemy models.
 These are infrastructure-level representations of domain entities.
+Works with both PostgreSQL and SQLite.
 """
 
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -20,29 +20,69 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    text,
+    func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import settings
 from app.infrastructure.database import Base
+
+# ── Type Helpers ────────────────────────────────────────
+
+def UUIDType():
+    """Return the appropriate UUID column type."""
+    if settings.DB_TYPE == "postgres":
+        return PG_UUID(as_uuid=True)
+    return String(36)  # SQLite stores UUIDs as strings
+
+
+def JSONType():
+    """Return JSON column type. Uses generic JSON for SQLite, JSONB for PG."""
+    if settings.DB_TYPE == "postgres":
+        from sqlalchemy.dialects.postgresql import JSONB as _JSONB
+        return _JSONB
+    from sqlalchemy import JSON as _JSON
+    return _JSON
+
+
+def VectorType(dim: int = 384):
+    """Return Vector column type, or Text fallback for SQLite."""
+    if settings.DB_TYPE == "postgres":
+        try:
+            from pgvector.sqlalchemy import Vector as _Vector
+            return _Vector(dim)
+        except ImportError:
+            return String(4096)
+    return String(4096)  # SQLite: store embedding as comma-separated string
+
+
+def now_default():
+    """Return a compatible default timestamp."""
+    if settings.DB_TYPE == "postgres":
+        from sqlalchemy import text
+        return text("NOW()")
+    return func.now()
+
+
+# ── Models ──────────────────────────────────────────────
 
 
 class UserModel(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        UUIDType(), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()")
+        DateTime(timezone=True), default=now_default
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()"), onupdate=text("NOW()")
+        DateTime(timezone=True), default=now_default, onupdate=now_default
     )
 
     # Relationships
@@ -60,20 +100,20 @@ class UserModel(Base):
 class ConversationModel(Base):
     __tablename__ = "conversations"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        UUIDType(), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    user_id: Mapped[str] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     title: Mapped[str] = mapped_column(String(255), default="New Conversation")
     model: Mapped[str] = mapped_column(String(50), default="gpt-4o")
-    metadata_: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
+    metadata_: Mapped[Dict[str, Any]] = mapped_column(JSONType(), default=dict)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()")
+        DateTime(timezone=True), default=now_default
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()"), onupdate=text("NOW()")
+        DateTime(timezone=True), default=now_default, onupdate=now_default
     )
 
     # Relationships
@@ -92,21 +132,21 @@ class ConversationModel(Base):
 class MessageModel(Base):
     __tablename__ = "messages"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        UUIDType(), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    conversation_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    conversation_id: Mapped[str] = mapped_column(
+        UUIDType(),
         ForeignKey("conversations.id", ondelete="CASCADE"),
         nullable=False,
     )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    tool_calls: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    tool_calls: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONType(), nullable=True)
     tool_call_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     token_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()")
+        DateTime(timezone=True), default=now_default
     )
 
     # Relationships
@@ -121,36 +161,29 @@ class MessageModel(Base):
 class MemoryEntryModel(Base):
     __tablename__ = "memory_entries"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        UUIDType(), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    user_id: Mapped[str] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding = mapped_column(Vector(384), nullable=True)
+    embedding: Mapped[Optional[str]] = mapped_column(VectorType(384), nullable=True)
     memory_type: Mapped[str] = mapped_column(String(50), default="fact")
     importance: Mapped[float] = mapped_column(Float, default=0.5)
     access_count: Mapped[int] = mapped_column(Integer, default=0)
     last_accessed: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    metadata_: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
+    metadata_: Mapped[Dict[str, Any]] = mapped_column(JSONType(), default=dict)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()")
+        DateTime(timezone=True), default=now_default
     )
 
     # Relationships
     user: Mapped["UserModel"] = relationship(back_populates="memory_entries")
 
     __table_args__ = (
-        Index(
-            "idx_memory_embedding",
-            "embedding",
-            postgresql_using="ivfflat",
-            postgresql_with={"lists": "100"},
-            postgresql_ops={"embedding": "vector_cosine_ops"},
-        ),
         Index("idx_memory_user_id", "user_id"),
         Index("idx_memory_type", "memory_type"),
     )
@@ -159,11 +192,11 @@ class MemoryEntryModel(Base):
 class ScheduledTaskModel(Base):
     __tablename__ = "scheduled_tasks"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        UUIDType(), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    user_id: Mapped[str] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -176,9 +209,9 @@ class ScheduledTaskModel(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     task_type: Mapped[str] = mapped_column(String(50), default="reminder")
-    payload: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
+    payload: Mapped[Dict[str, Any]] = mapped_column(JSONType(), default=dict)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()")
+        DateTime(timezone=True), default=now_default
     )
 
     # Relationships
@@ -193,18 +226,18 @@ class ScheduledTaskModel(Base):
 class PluginModel(Base):
     __tablename__ = "plugins"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        UUIDType(), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     version: Mapped[str] = mapped_column(String(20), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     entry_point: Mapped[str] = mapped_column(String(255), nullable=False)
-    config_schema: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    config_schema: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONType(), nullable=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()")
+        DateTime(timezone=True), default=now_default
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()"), onupdate=text("NOW()")
+        DateTime(timezone=True), default=now_default, onupdate=now_default
     )

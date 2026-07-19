@@ -27,9 +27,30 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
 
     # ── Database ─────────────────────────────────────
-    DATABASE_URL: str = "postgresql+asyncpg://jarvis:jarvis_secret@localhost:5432/jarvis"
-    DATABASE_URL_SYNC: str = "postgresql://jarvis:jarvis_secret@localhost:5432/jarvis"
+    # Set DB_TYPE=postgres to use PostgreSQL (requires Docker)
+    DB_TYPE: str = "sqlite"  # sqlite | postgres
+    DATABASE_URL: str = ""  # auto-computed if empty
+    DATABASE_URL_SYNC: str = ""  # auto-computed if empty
     REDIS_URL: str = "redis://localhost:6379/0"
+    USE_REDIS: bool = False  # disable Redis for SQLite/dev mode
+
+    @property
+    def db_url(self) -> str:
+        """Return the async database URL based on DB_TYPE."""
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        if self.DB_TYPE == "postgres":
+            return "postgresql+asyncpg://jarvis:jarvis_secret@localhost:5432/jarvis"
+        return "sqlite+aiosqlite:///./data/jarvis.db"
+
+    @property
+    def db_url_sync(self) -> str:
+        """Return the sync database URL based on DB_TYPE."""
+        if self.DATABASE_URL_SYNC:
+            return self.DATABASE_URL_SYNC
+        if self.DB_TYPE == "postgres":
+            return "postgresql://jarvis:jarvis_secret@localhost:5432/jarvis"
+        return "sqlite:///./data/jarvis.db"
 
     # ── LLM Provider ─────────────────────────────────
     LLM_PROVIDER: str = "groq"  # groq | openai | ollama
