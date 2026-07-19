@@ -1,0 +1,5 @@
+groq==0.10.0
+openwakeword==0.4.0
+SpeechRecognition==3.10.1
+pydub==0.25.1
+pyttsx3==2.90
