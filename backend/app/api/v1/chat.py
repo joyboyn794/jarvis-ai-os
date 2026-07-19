@@ -24,6 +24,7 @@ from app.domain.entities import User
 from app.domain.exceptions import ConversationNotFoundError
 from app.application.interfaces import ChatRequest as ChatReqDTO
 from app.application.services.chat_service import ChatService
+from app.application.services.auth_service import AuthService
 from app.api.schemas import (
     ChatRequest,
     ConversationDetailResponse,
@@ -184,6 +185,7 @@ async def websocket_chat(
     websocket: WebSocket,
     token: str = Query(...),
     chat_service: ChatService = Depends(get_chat_service),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     WebSocket endpoint for real-time streaming chat.
@@ -215,11 +217,9 @@ async def websocket_chat(
         "message": "error description"
     }
     """
-    from app.api.dependencies import get_auth_service
 
     # Authenticate via token
     try:
-        auth_service = get_auth_service()
         user = await auth_service.get_current_user(token)
     except Exception:
         await websocket.close(code=4001, reason="Authentication failed")

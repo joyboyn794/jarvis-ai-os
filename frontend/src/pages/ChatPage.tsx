@@ -51,8 +51,8 @@ export function ChatPage() {
       .catch(() => setMessages([]));
   }, [currentConversationId, setMessages]);
 
-  // Connect WebSocket for streaming
-  const connectWebSocket = useCallback(() => {
+  // Connect WebSocket — runs ONCE when accessToken is available
+  useEffect(() => {
     if (!accessToken) return;
 
     const ws = createChatWebSocket(accessToken);
@@ -60,6 +60,7 @@ export function ChatPage() {
 
     ws.onopen = () => {
       console.log('WebSocket connected');
+      setError('');
     };
 
     ws.onmessage = (event) => {
@@ -71,23 +72,25 @@ export function ChatPage() {
           break;
 
         case 'done': {
+          // Read latest streamingContent from store (not stale closure)
+          const fullContent = useChatStore.getState().streamingContent;
           const assistantMsg = {
             id: data.message_id,
             conversation_id: data.conversation_id,
             role: 'assistant' as const,
-            content: streamingContent,
+            content: fullContent,
             token_count: data.tokens_used || 0,
             created_at: new Date().toISOString(),
           };
 
           // Update conversation ID if new
-          if (!currentConversationId) {
+          if (!useChatStore.getState().currentConversationId) {
             useChatStore.setState({
               currentConversationId: data.conversation_id,
             });
 
             // Refresh conversation list
-            chatApi.listConversations().then(setConversions);
+            chatApi.listConversations().then(setConversations);
           }
 
           stopStreaming(assistantMsg);
@@ -109,14 +112,12 @@ export function ChatPage() {
     ws.onclose = () => {
       console.log('WebSocket disconnected');
     };
-  }, [accessToken, currentConversationId, streamingContent]);
 
-  useEffect(() => {
-    connectWebSocket();
     return () => {
-      wsRef.current?.close();
+      ws.close();
+      wsRef.current = null;
     };
-  }, [connectWebSocket]);
+  }, [accessToken]); // only reconnect when token changes
 
   // Send message via WebSocket
   const sendMessage = useCallback(
@@ -128,10 +129,12 @@ export function ChatPage() {
 
       setError('');
 
+      const convId = useChatStore.getState().currentConversationId;
+
       // Add user message to local state
       const userMsg = {
         id: crypto.randomUUID(),
-        conversation_id: currentConversationId || 'pending',
+        conversation_id: convId || 'pending',
         role: 'user' as const,
         content: text,
         token_count: 0,
@@ -144,13 +147,13 @@ export function ChatPage() {
       wsRef.current.send(
         JSON.stringify({
           type: 'message',
-          conversation_id: currentConversationId,
+          conversation_id: convId,
           message: text,
           use_memory: true,
         })
       );
     },
-    [currentConversationId, addMessage, startStreaming]
+    [addMessage, startStreaming]
   );
 
   const selectConversation = useCallback(
@@ -170,7 +173,7 @@ export function ChatPage() {
       try {
         await chatApi.deleteConversation(id);
         useChatStore.getState().removeConversation(id);
-        if (currentConversationId === id) {
+        if (useChatStore.getState().currentConversationId === id) {
           setCurrentConversation(null);
           setMessages([]);
         }
@@ -178,7 +181,7 @@ export function ChatPage() {
         setError('Failed to delete conversation');
       }
     },
-    [currentConversationId, setCurrentConversation, setMessages]
+    [setCurrentConversation, setMessages]
   );
 
   return (
